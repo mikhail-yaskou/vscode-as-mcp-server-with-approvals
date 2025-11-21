@@ -26,7 +26,14 @@ export class ConfirmationUI {
    * @param denyLabel 拒否ボタンのラベル
    * @returns 承認された場合は "Approve"、拒否された場合は "Deny" または理由テキスト
    */
-  static async confirm(message: string, detail: string, approveLabel: string, denyLabel: string): Promise<string> {
+  static async confirm(
+    message: string,
+    detail: string,
+    approveLabel: string,
+    denyLabel: string,
+    approveSessionLabel?: string,
+    approveAlwaysLabel?: string,
+  ): Promise<string> {
     // 設定から確認UI方法を取得
     const config = vscode.workspace.getConfiguration('mcpServer');
     const confirmationUI = config.get<string>('confirmationUI', 'quickPick');
@@ -34,7 +41,14 @@ export class ConfirmationUI {
     console.log(`[ConfirmationUI] Using ${confirmationUI} UI for confirmation`);
 
     if (confirmationUI === 'quickPick') {
-      return await this.showQuickPickConfirmation(message, detail, approveLabel, denyLabel);
+      return await this.showQuickPickConfirmation(
+        message,
+        detail,
+        approveLabel,
+        denyLabel,
+        approveSessionLabel,
+        approveAlwaysLabel,
+      );
     } else {
       return await this.showStatusBarConfirmation(message, detail, approveLabel, denyLabel);
     }
@@ -47,7 +61,9 @@ export class ConfirmationUI {
     message: string, 
     detail: string, 
     approveLabel: string,
-    denyLabel: string
+    denyLabel: string,
+    approveSessionLabel?: string,
+    approveAlwaysLabel?: string,
   ): Promise<string> {
     // QuickPickを作成
     const quickPick = vscode.window.createQuickPick();
@@ -56,9 +72,11 @@ export class ConfirmationUI {
     quickPick.placeholder = detail || '';
 
     quickPick.items = [
-      { label: `$(check) Approve`, description: approveLabel },
-      { label: `$(x) Deny`, description: denyLabel }
-    ];
+      { label: `$(check) Approve`, description: approveLabel, value: "Approve" },
+      approveSessionLabel ? { label: `$(rocket) Approve for session`, description: approveSessionLabel, value: "ApproveSession" } : null,
+      approveAlwaysLabel ? { label: `$(shield) Always allow`, description: approveAlwaysLabel, value: "ApproveAlways" } : null,
+      { label: `$(x) Deny`, description: denyLabel, value: "Deny" }
+    ].filter(Boolean) as { label: string; description: string; value: string }[];
     quickPick.canSelectMany = false;
     quickPick.ignoreFocusOut = true;
 
