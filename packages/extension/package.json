@@ -53,6 +53,14 @@
           "type": "boolean",
           "default": false,
           "description": "If true, even commands marked as non-destructive (modifySomething=false) will require user confirmation."
+        },
+        "mcpServer.allowedExecuteCommands": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Regex patterns for command names (first token) that can run via execute_command without confirmation."
         }
       }
     }

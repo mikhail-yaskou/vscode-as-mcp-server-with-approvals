@@ -30,6 +30,8 @@ export const executeCommandSchema = z.object({
 })
 
 export class ExecuteCommandTool {
+  // Session-scoped allowlist of command names (resets when extension reloads)
+  private static approvedCommandNames = new Set<string>();
   private cwd: string
   private terminalManager: TerminalManager
 
@@ -48,6 +50,7 @@ export class ExecuteCommandTool {
     // Get setting for confirming non-destructive commands
     const config = vscode.workspace.getConfiguration("mcpServer");
     const confirmNonDestructiveCommands = config.get<boolean>("confirmNonDestructiveCommands", false);
+    const allowedPatterns = config.get<string[]>("allowedExecuteCommands", []);
 
     // Determine if we need to ask for confirmation
     const shouldConfirm = modifySomething || confirmNonDestructiveCommands;
@@ -56,7 +59,7 @@ export class ExecuteCommandTool {
       // Ask for permission based on either:
       // 1. Command is potentially destructive OR
       // 2. User has enabled confirmation for all commands
-      const userResponse = await this.ask(command);
+      const userResponse = await this.ask(command, allowedPatterns);
 
       // If user denied execution
       if (userResponse !== "Approve") {
@@ -138,8 +141,96 @@ export class ExecuteCommandTool {
     }
   }
 
-  protected async ask(command: string): Promise<string> {
-    return await ConfirmationUI.confirm("Execute Command?", command, "Execute Command", "Deny");
+  protected async ask(command: string, allowedPatterns: string[]): Promise<string> {
+    const commandName = this.extractCommandName(command);
+    if (commandName && ExecuteCommandTool.approvedCommandNames.has(commandName)) {
+      return "Approve";
+    }
+    if (commandName && this.isInAllowedPatterns(commandName, allowedPatterns)) {
+      return "Approve";
+    }
+
+    const preview = this.formatCommandPreview(command);
+    const response = await ConfirmationUI.confirm(
+      "Execute Command?",
+      preview,
+      "Execute Command",
+      "Deny",
+      commandName ? `Approve "${commandName}" for session` : "Approve for this session",
+      commandName ? `Always allow "${commandName}" (persist)` : undefined
+    );
+
+    if (response === "ApproveSession") {
+      if (commandName) {
+        ExecuteCommandTool.approvedCommandNames.add(commandName);
+      }
+      return "Approve";
+    }
+    if (response === "ApproveAlways") {
+      if (commandName) {
+        ExecuteCommandTool.approvedCommandNames.add(commandName);
+        await this.persistAllowedCommand(commandName);
+      }
+      return "Approve";
+    }
+
+    return response;
+  }
+
+  private formatCommandPreview(command: string): string {
+    const normalized = command.trim().replace(/\s+/g, " ");
+    const limit = 160;
+    if (normalized.length > limit) {
+      return `${normalized.slice(0, limit - 3)}...`;
+    }
+    return normalized;
+  }
+
+  private extractCommandName(command: string): string | null {
+    const trimmed = command.trim();
+    if (!trimmed) return null;
+    // naive split on whitespace; first token is the command name
+    const first = trimmed.split(/\s+/)[0];
+    // strip surrounding quotes if present
+    const unquoted = first.replace(/^['"]|['"]$/g, "");
+    return unquoted || null;
+  }
+
+  private isInAllowedPatterns(commandName: string, patterns: string[]): boolean {
+    for (const pattern of patterns) {
+      try {
+        const re = new RegExp(pattern);
+        if (re.test(commandName)) return true;
+      } catch (err) {
+        console.warn(`Invalid allowedExecuteCommands pattern skipped: ${pattern}`);
+      }
+    }
+    return false;
+  }
+
+  private async persistAllowedCommand(commandName: string) {
+    const config = vscode.workspace.getConfiguration("mcpServer");
+    const patterns = config.get<string[]>("allowedExecuteCommands", []);
+
+    const escaped = this.escapeRegex(commandName);
+    const exactPattern = `^${escaped}$`;
+
+    if (patterns.includes(exactPattern)) return;
+
+    const next = [...patterns, exactPattern];
+    try {
+      await config.update(
+        "allowedExecuteCommands",
+        next,
+        vscode.ConfigurationTarget.Workspace
+      );
+    } catch (err) {
+      console.error("Failed to persist allowedExecuteCommands", err);
+    }
+  }
+
+  private escapeRegex(value: string): string {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   }
 }
 
