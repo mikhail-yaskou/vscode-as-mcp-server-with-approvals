@@ -151,13 +151,20 @@ export class ExecuteCommandTool {
     }
 
     const preview = this.formatCommandPreview(command);
+    const sessionLabel = commandName
+      ? `Approve "${commandName}" until server restart`
+      : "Approve until server restart";
+    const alwaysLabel = commandName
+      ? `Always allow "${commandName}" (persist as ^${this.escapeRegex(commandName)}$)`
+      : "Always allow (persist)";
+
     const response = await ConfirmationUI.confirm(
       "Execute Command?",
       preview,
       "Execute Command",
       "Deny",
-      commandName ? `Approve "${commandName}" for session` : "Approve for this session",
-      commandName ? `Always allow "${commandName}" (persist)` : undefined
+      sessionLabel,
+      alwaysLabel
     );
 
     if (response === "ApproveSession") {
