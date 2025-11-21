@@ -85,8 +85,15 @@ export class ConfirmationUI {
         const selection = quickPick.selectedItems[0];
         quickPick.hide();
 
-        if (selection.label.includes("Approve")) {
-          resolve("Approve");
+        const choice = (selection as any).value
+          || (selection.label.includes('Approve for session') ? 'ApproveSession'
+              : selection.label.includes('Always allow') ? 'ApproveAlways'
+              : selection.label.includes('Approve') ? 'Approve'
+              : selection.label.includes('Deny') ? 'Deny'
+              : selection.label);
+
+        if (choice === "Approve" || choice === "ApproveSession" || choice === "ApproveAlways") {
+          resolve(choice);
         } else {
           // Show QuickInput for feedback if denied
           const inputBox = vscode.window.createInputBox();
