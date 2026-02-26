@@ -5,3 +5,7 @@ dist
 node_modules
 out
 tsconfig.tsbuildinfo
+.DS_Store
+.vscode/extensions.json
+.vscode/keybindings.json
+.vscode/settings.json
